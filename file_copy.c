@@ -8,28 +8,38 @@
 #include <sys/sendfile.h>
 #include <sys/stat.h>
 
-#define BUF_SIZE            64
 #define SOURCE_FILE         "source_file"
 #define DESTINATION_FILE    "destinaion_file"
 #define MODE_READ_WRITE     "1"
 #define MODE_MMAP_WRITE     "2"
 #define MODE_SENDFILE       "3"
 
+enum file_copy_mode {
+    mode_read_write,
+    mode_mmap_write,
+    mode_sendfile,
+    mode_unknown
+};
+
+static int buf_size = 64; /* Default 64 bytes */
+static char *buf = NULL;
+
 void usage(void)
 {
     printf("Usage\n");
-    printf("  file_copy -m <mode>\n\n");
+    printf("  file_copy -m <mode> -b <buffer size>\n\n");
     printf("Mode:\n");
-    printf("  1:    read/write\n");
-    printf("  2:    mmap/write\n");
-    printf("  3:    sendfile\n");
+    printf("  1:        read/write\n");
+    printf("  2:        mmap/write\n");
+    printf("  3:        sendfile\n\n");
+    printf("Buffer size: bytes, default is 64\n");
 }
 
 void file_copy_read_write(void)
 {
     int write_fd;
     int read_fd;
-    char buf[BUF_SIZE];
+    char buf[buf_size];
     ssize_t len;
 
     if ((read_fd = open(SOURCE_FILE, O_RDONLY)) == -1) {
@@ -86,8 +96,8 @@ void file_copy_mmap_write(void)
         return ;
     }
 
-    while (i < (statbuf.st_size / BUF_SIZE)) {
-        write(write_fd, addr + (i * BUF_SIZE), BUF_SIZE);
+    while (i < (statbuf.st_size / buf_size)) {
+        write(write_fd, addr + (i * buf_size), buf_size);
         i++;
     }
 
@@ -129,18 +139,39 @@ void file_copy_sendfile(void)
 
 int main(int argc, char **argv)
 {
-    if (argc == 3 && !strcmp(argv[1], "-m")) {
-        if (!strcmp(argv[2], MODE_READ_WRITE))
-            file_copy_read_write();
-        else if (!strcmp(argv[2], MODE_MMAP_WRITE))
-            file_copy_mmap_write();
-        else if (!strcmp(argv[2], MODE_SENDFILE))
-            file_copy_sendfile();
-        else
-            printf("Unknow mode\n");
-    } else {
-        usage();
+    int cmd_option;
+    int mode = mode_unknown;
+
+    while ((cmd_option = getopt(argc, argv, "m:b:h")) != -1) {
+        switch (cmd_option) {
+            case 'm':
+                if (!strcmp(optarg, MODE_READ_WRITE))
+                    mode = mode_read_write;
+                else if (!strcmp(optarg, MODE_MMAP_WRITE))
+                    mode = mode_mmap_write;
+                else if (!strcmp(optarg, MODE_SENDFILE))
+                    mode = mode_sendfile;
+                else
+                    mode = mode_unknown;
+                break;
+            case 'b':
+                sscanf(optarg, "%d", &buf_size);
+                break;
+            case 'h':
+            default:
+                usage();
+                return 0;
+        }
     }
+
+    if (mode == mode_read_write)
+        file_copy_read_write();
+    else if (mode == mode_mmap_write)
+        file_copy_mmap_write();
+    else if (mode == mode_sendfile)
+        file_copy_sendfile();
+    else
+        printf("Unknown mode\n");
 
     return 0;
 }
