@@ -7,6 +7,7 @@
 #include <sys/mman.h>
 #include <sys/sendfile.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 
 #define SOURCE_FILE         "source_file"
 #define DESTINATION_FILE    "destinaion_file"
@@ -21,6 +22,9 @@ enum file_copy_mode {
     mode_unknown
 };
 
+static struct timeval start;
+static struct timeval end;
+static struct timeval diff;
 static int buf_size = 64; /* Default 64 bytes */
 static char *buf = NULL;
 
@@ -44,18 +48,24 @@ void file_copy_read_write(void)
 
     if ((read_fd = open(SOURCE_FILE, O_RDONLY)) == -1) {
         printf("open file %s fail, errno: %d\n", SOURCE_FILE, errno);
-        return ;
+        exit(1);
     }
 
     if ((write_fd = open(DESTINATION_FILE,
                          O_WRONLY | O_CREAT | O_TRUNC, 0666)) == -1) {
         printf("open file %s fail, errno: %d\n", DESTINATION_FILE, errno);
         close(read_fd);
-        return ;
+        exit(1);
     }
 
+    gettimeofday(&start, NULL);
     while ((len = read(read_fd, buf, sizeof(buf))))
         write(write_fd, buf, sizeof(buf));
+    gettimeofday(&end, NULL);
+
+    timersub(&end, &start, &diff);
+
+    printf("read/write = %0.3f sec\n", diff.tv_sec + (double) diff.tv_usec / 1000000.0);
 
     close(read_fd);
     close(write_fd);
@@ -71,35 +81,41 @@ void file_copy_mmap_write(void)
 
     if ((read_fd = open(SOURCE_FILE, O_RDONLY)) == -1) {
         printf("open file %s fail, errno: %d\n", SOURCE_FILE, errno);
-        return ;
+        exit(1);
     }
 
     if ((write_fd = open(DESTINATION_FILE,
                          O_WRONLY | O_CREAT | O_TRUNC, 0666)) == -1) {
         printf("open file %s fail, errno: %d\n", DESTINATION_FILE, errno);
         close(read_fd);
-        return ;
+        exit(1);
     }
 
     if (fstat(read_fd, &statbuf) == -1) {
         printf("fstat file %s fail, errno: %d\n", SOURCE_FILE, errno);
         close(read_fd);
         close(write_fd);
-        return ;
+        exit(1);
     }
 
     addr = mmap(NULL, statbuf.st_size, PROT_READ, MAP_SHARED, read_fd, 0);
     if (addr == MAP_FAILED){
-        printf("mmap() fail, errno: %d\n", errno);
+        printf("mmap fail, errno: %d\n", errno);
         close(read_fd);
         close(write_fd);
-        return ;
+        exit(1);
     }
 
+    gettimeofday(&start, NULL);
     while (i < (statbuf.st_size / buf_size)) {
         write(write_fd, addr + (i * buf_size), buf_size);
         i++;
     }
+    gettimeofday(&end, NULL);
+
+    timersub(&end, &start, &diff);
+
+    printf("mmap/write = %0.3f sec\n", diff.tv_sec + (double) diff.tv_usec / 1000000.0);
 
     munmap(addr, statbuf.st_size);
     close(read_fd);
@@ -114,24 +130,30 @@ void file_copy_sendfile(void)
 
     if ((read_fd = open(SOURCE_FILE, O_RDONLY)) == -1) {
         printf("open file %s fail, errno: %d\n", SOURCE_FILE, errno);
-        return ;
+        exit(1);
     }
 
     if ((write_fd = open(DESTINATION_FILE,
                          O_WRONLY | O_CREAT | O_TRUNC, 0666)) == -1) {
         printf("open file %s fail, errno: %d\n", DESTINATION_FILE, errno);
         close(read_fd);
-        return ;
+        exit(1);
     }
 
     if (fstat(read_fd, &statbuf) == -1) {
         printf("fstat file %s fail, errno: %d\n", SOURCE_FILE, errno);
         close(read_fd);
         close(write_fd);
-        return ;
+        exit(1);
     }
 
+    gettimeofday(&start, NULL);
     sendfile(write_fd, read_fd, 0, statbuf.st_size);
+    gettimeofday(&end, NULL);
+
+    timersub(&end, &start, &diff);
+
+    printf("sendfile = %0.3f sec\n", diff.tv_sec + (double) diff.tv_usec / 1000000.0);
 
     close(read_fd);
     close(write_fd);

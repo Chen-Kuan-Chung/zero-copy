@@ -1,5 +1,4 @@
 #!/bin/bash
-TIMEFORMAT=%R
 ITERATION=10
 BUFFER_SIZE=("32" "64" "128" "256" "512")
 RAW_DATA="raw"
@@ -34,7 +33,7 @@ function do_file_copy
         progress_bar ${START} ${END}
         START=$((START+1))
 
-        TIME=$( { time ./file_copy -m ${1} -b ${3}; } 2>&1 )
+        TIME=$(echo $(./file_copy -m ${1} -b ${3}) | sed 's/[^0-9.]*//g')
         sum=$(awk "BEGIN {print $sum+$TIME; exit}")
         echo ${TIME} >> ${RAW_DATA}/${2}${3}
         rm ${DESTINATION_FILE}
